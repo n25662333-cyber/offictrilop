@@ -103,7 +103,6 @@ async def get_subscription_date_telethon(user_id: int):
     try:
         channel = await telethon_client.get_entity(CHANNEL_ID)
         
-        # Пытаемся получить участника напрямую
         try:
             result = await telethon_client(GetParticipantRequest(
                 channel=channel,
@@ -124,7 +123,6 @@ async def get_subscription_date_telethon(user_id: int):
         except Exception as e:
             print(f"Не удалось получить участника напрямую: {e}")
             
-            # Получаем всех участников
             offset = 0
             limit = 100
             all_participants = []
@@ -142,7 +140,6 @@ async def get_subscription_date_telethon(user_id: int):
                     break
                 offset += limit
             
-            # Ищем нужного пользователя
             target_user = None
             for user in all_participants:
                 if user.id == user_id:
@@ -153,7 +150,6 @@ async def get_subscription_date_telethon(user_id: int):
                 print(f"Пользователь {user_id} не найден в канале")
                 return None
             
-            # Получаем участника с датой
             result = await telethon_client(GetParticipantRequest(
                 channel=channel,
                 participant=target_user
@@ -240,7 +236,7 @@ async def show_profile(message: types.Message):
 Имя: {full_name}
 Telegram ID: {user_id}
 Никнейм: {username_display}
-Дата: {join_date}
+Дата подписки на канал: {join_date}
 Статус в канале: {sub_status}
     """
     
@@ -269,7 +265,7 @@ async def cmd_start(message: types.Message):
     
     if is_subscribed:
         await message.answer(
-            f"Привет, {message.from_user.full_name}!\nДоступ открыт.",
+            f"Привет, {message.from_user.full_name}!\nДоступ открыт. Выберите нужный раздел в меню ниже:",
             reply_markup=get_main_menu()
         )
     else:
@@ -278,7 +274,8 @@ async def cmd_start(message: types.Message):
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[link_btn], [check_btn]])
         
         await message.answer(
-            f"Привет, {message.from_user.full_name}!\n\nДля использования бота подпишитесь на канал.",
+            f"Привет, {message.from_user.full_name}!\n\n"
+            "Для использования этого бота необходимо подписаться на наш канал.",
             reply_markup=keyboard
         )
 
@@ -295,33 +292,48 @@ async def handle_all_buttons(message: types.Message):
     elif text == DESIGN_BUTTON:
         await message.answer(
             "Мои услуги дизайна:\n\n"
-            "Логотипы - уникальные, запоминающиеся.\n"
-            "Аватарки - стильное оформление.\n"
-            "Баннеры - для сайтов и каналов.\n\n"
-            "Чтобы сделать заказ, нажмите Связь с Trilop"
+            "Логотипы - уникальные, запоминающиеся и отражающие суть вашего дела.\n"
+            "Аватарки - стильное оформление для профилей в соцсетях и мессенджерах.\n"
+            "Баннеры - рекламные, для сайтов, каналов или оформления сообществ.\n\n"
+            "Каждый заказ обсуждается индивидуально, учитывая все ваши пожелания.\n\n"
+            "Чтобы сделать заказ, нажмите кнопку Связь с Trilop и напишите мне в ЛС"
         )
     elif text == ABOUT_BUTTON:
         await message.answer(
-            "Привет! Я графический дизайнер.\n\n"
-            "Помогаю брендам и бизнесу выделяться."
+            "Привет! Я ваш персональный графический дизайнер.\n\n"
+            "Помогаю брендам, блогерам и бизнесу выделяться с помощью стильного визуала. "
+            "Создаю уникальный дизайн, который привлекает клиентов и радует глаз!"
         )
     elif text == PORTFOLIO_BUTTON:
         btn = types.InlineKeyboardButton(text="Посмотреть портфолио", url="https://t.me/triloppo")
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[btn]])
-        await message.answer("Мои работы:", reply_markup=keyboard)
+        await message.answer(
+            "Тут вы можете ознакомиться с примерами моих работ",
+            reply_markup=keyboard
+        )
     elif text == REVIEWS_BUTTON:
         btn = types.InlineKeyboardButton(text="Читать отзывы", url="https://t.me/TRILOOPOT")
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[btn]])
-        await message.answer("Отзывы клиентов:", reply_markup=keyboard)
-    elif text == CONTACT_BUTTON:
-        btn = types.InlineKeyboardButton(text="Написать Trilop", url="https://t.me/Trilop_01")
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[btn]])
-        await message.answer("Связь со мной:", reply_markup=keyboard)
-    elif text == SPAM_BUTTON:
-        btn = types.InlineKeyboardButton(text="Перейти в @Trilopsbot", url="https://t.me/Trilopsbot")
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[btn]])
         await message.answer(
-            "Обход спам-блока:\n\n@Trilopsbot",
+            "Отзывы моих клиентов!\n\nЗдесь вы можете прочитать, что говорят люди о моей работе. Нажмите на кнопку ниже",
+            reply_markup=keyboard
+        )
+    elif text == CONTACT_BUTTON:
+        support_link = "https://t.me/Trilop_01?text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82%D1%81%D1%82%D0%B2%D1%83%D1%8E%2C%20%D1%85%D0%BE%D1%87%D1%83%20%D0%B7%D0%B0%D0%BA%D0%B0%D0%B7%D0%B0%D1%82%D1%8C%20%D1%83%20%D0%B2%D0%B0%D1%81%20%D0%B4%D0%B8%D0%B7%D0%B0%D0%B9%D0%BD"
+        support_btn = types.InlineKeyboardButton(text="Написать Trilop", url=support_link)
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[support_btn]])
+        await message.answer(
+            "Нажмите на кнопку ниже, чтобы написать мне в личные сообщения.",
+            reply_markup=keyboard
+        )
+    elif text == SPAM_BUTTON:
+        backup_bot_btn = types.InlineKeyboardButton(text="Перейти в @Trilopsbot", url="https://t.me/Trilopsbot")
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[backup_bot_btn]])
+        await message.answer(
+            "У вас спам-блок и вы не можете связаться со мной!\n\n"
+            "Вы можете связаться с Trilop через резервного бота:\n\n"
+            "@Trilopsbot - бот для обхода спам-блока\n\n"
+            "Оставьте ваше сообщение в этом боте, Trilop ответит вам в ближайшее время.",
             reply_markup=keyboard
         )
     elif text == SUPPORT_BUTTON:
@@ -337,15 +349,16 @@ async def handle_all_buttons(message: types.Message):
             username = f"@{message.from_user.username}" if message.from_user.username else "нет"
             await bot.send_message(
                 ADMIN_ID,
-                f"Новое сообщение\n\n"
+                f"Новое сообщение (Обход спам-блока)\n\n"
                 f"Имя: {message.from_user.full_name}\n"
                 f"ID: {message.from_user.id}\n"
                 f"Сообщение: {message.text}\n"
                 f"Username: {username}"
             )
-            await message.answer("Сообщение отправлено!")
+            await message.answer("Ваше сообщение отправлено! Trilop свяжется с вами в ближайшее время.")
         except Exception as e:
             print(f"Ошибка: {e}")
+            await message.answer("Произошла ошибка. Пожалуйста, попробуйте позже или свяжитесь напрямую: @Trilop_01")
 
 @dp.callback_query(lambda c: c.data == "check_sub")
 async def process_check_sub(callback_query: types.CallbackQuery):
@@ -353,10 +366,10 @@ async def process_check_sub(callback_query: types.CallbackQuery):
     is_subscribed = await check_subscription(user_id)
     
     if is_subscribed:
-        await callback_query.message.edit_text("Спасибо за подписку!")
-        await callback_query.message.answer("Главное меню:", reply_markup=get_main_menu())
+        await callback_query.message.edit_text("Спасибо за подписку! Доступ открыт.")
+        await callback_query.message.answer("Добро пожаловать в главное меню:", reply_markup=get_main_menu())
     else:
-        await callback_query.answer("Вы не подписались!", show_alert=True)
+        await callback_query.answer("Вы всё еще не подписались на канал!", show_alert=True)
 
 async def main():
     print("Бот запущен")
@@ -365,6 +378,7 @@ async def main():
     if not API_ID or not API_HASH or not PHONE:
         print("ВНИМАНИЕ: Не указаны API_ID, API_HASH или PHONE для Telethon!")
         print("Дата подписки работать НЕ будет!")
+        print("Получите данные на my.telegram.org")
     else:
         try:
             await telethon_client.start(phone=PHONE)
