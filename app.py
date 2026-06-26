@@ -10,7 +10,6 @@ from telethon.tl.types import ChannelParticipantsSearch
 import datetime
 import sqlite3
 import time
-from aiohttp import web
 
 load_dotenv()
 
@@ -26,7 +25,7 @@ dp = Dispatcher()
 telethon_client = TelegramClient('session', API_ID, API_HASH)
 
 # ============= БАННЕР ПРИВЕТСТВИЯ =============
-WELCOME_BANNER = os.getenv("WELCOME_BANNER", "")
+WELCOME_BANNER = "AgACAgIAAxkBAAFNdChqPekBHYvV2ahngd5FDt-N3Xk0TAACChprG4Yi8Ukaooz0BzOwzwEAAwIAA3cAAzwE"
 
 # ============= БАЗА ДАННЫХ =============
 def init_db():
@@ -264,28 +263,14 @@ Telegram ID: {user_id}
 async def cmd_profile(message: types.Message):
     await show_profile(message)
 
-async def send_welcome(message: types.Message, caption: str, reply_markup):
-    """Send welcome message — uses photo banner if WELCOME_BANNER env is set and valid."""
-    if WELCOME_BANNER:
-        try:
-            await message.answer_photo(
-                photo=WELCOME_BANNER,
-                caption=caption,
-                reply_markup=reply_markup
-            )
-            return
-        except Exception as e:
-            print(f"Баннер недоступен, отправляем текст: {e}")
-    await message.answer(caption, reply_markup=reply_markup)
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     is_subscribed = await check_subscription(user_id)
     
     if is_subscribed:
-        await send_welcome(
-            message,
+        await message.answer_photo(
+            photo=WELCOME_BANNER,
             caption=f"Привет, {message.from_user.full_name}!\nДоступ открыт. Выберите нужный раздел в меню ниже:",
             reply_markup=get_main_menu()
         )
@@ -293,8 +278,9 @@ async def cmd_start(message: types.Message):
         link_btn = types.InlineKeyboardButton(text="Подписаться на канал", url="https://t.me/tripooldes")
         check_btn = types.InlineKeyboardButton(text="Я подписался", callback_data="check_sub")
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[link_btn], [check_btn]])
-        await send_welcome(
-            message,
+        
+        await message.answer_photo(
+            photo=WELCOME_BANNER,
             caption=f"Привет, {message.from_user.full_name}!\n\nДля использования бота подпишитесь на канал.",
             reply_markup=keyboard
         )
@@ -391,26 +377,9 @@ async def process_check_sub(callback_query: types.CallbackQuery):
     else:
         await callback_query.answer("Вы всё еще не подписались на канал!", show_alert=True)
 
-# ============= HEALTH SERVER =============
-async def health_handler(request):
-    return web.Response(text="ok", status=200)
-
-async def run_health_server():
-    app = web.Application()
-    app.router.add_get("/", health_handler)
-    app.router.add_get("/health", health_handler)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8000)
-    await site.start()
-    print("Health server running on 0.0.0.0:8000")
-
 async def main():
     print("Бот запущен")
     print(f"ID канала: {CHANNEL_ID}")
-
-    # Start the health HTTP server first
-    await run_health_server()
     
     if not API_ID or not API_HASH or not PHONE:
         print("ВНИМАНИЕ: Не указаны API_ID, API_HASH или PHONE для Telethon!")
