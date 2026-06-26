@@ -24,6 +24,9 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 telethon_client = TelegramClient('session', API_ID, API_HASH)
 
+# ============= БАННЕР ПРИВЕТСТВИЯ =============
+WELCOME_BANNER = "AgACAgIAAxkBAAFNdChqPekBHYvV2ahngd5FDt-N3Xk0TAACChprG4Yi8Ukaooz0BzOwzwEAAwIAA3cAAzwE"
+
 def init_db():
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
@@ -62,6 +65,7 @@ def get_cached_date(user_id: int):
 
 init_db()
 
+# ============= КНОПКИ =============
 PROFILE_BUTTON = "Профиль"
 DESIGN_BUTTON = "Получить дизайн"
 ABOUT_BUTTON = "О нас"
@@ -264,8 +268,9 @@ async def cmd_start(message: types.Message):
     is_subscribed = await check_subscription(user_id)
     
     if is_subscribed:
-        await message.answer(
-            f"Привет, {message.from_user.full_name}!\nДоступ открыт. Выберите нужный раздел в меню ниже:",
+        await message.answer_photo(
+            photo=WELCOME_BANNER,
+            caption=f"Привет, {message.from_user.full_name}!\nДоступ открыт. Выберите нужный раздел в меню ниже:",
             reply_markup=get_main_menu()
         )
     else:
@@ -273,9 +278,9 @@ async def cmd_start(message: types.Message):
         check_btn = types.InlineKeyboardButton(text="Я подписался", callback_data="check_sub")
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[link_btn], [check_btn]])
         
-        await message.answer(
-            f"Привет, {message.from_user.full_name}!\n\n"
-            "Для использования этого бота необходимо подписаться на наш канал.",
+        await message.answer_photo(
+            photo=WELCOME_BANNER,
+            caption=f"Привет, {message.from_user.full_name}!\n\nДля использования бота подпишитесь на канал.",
             reply_markup=keyboard
         )
 
