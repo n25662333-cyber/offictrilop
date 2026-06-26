@@ -3,6 +3,10 @@ import asyncio
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from telethon import TelegramClient
+from telethon.errors import FloodWaitError
+from telethon.tl.functions.channels import GetParticipantRequest, GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsSearch
 import datetime
 import sqlite3
 import time
@@ -12,8 +16,13 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = -1003897540369
 
+API_ID = int(os.getenv("API_ID", 0))
+API_HASH = os.getenv("API_HASH", "")
+PHONE = os.getenv("PHONE", "")
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+telethon_client = TelegramClient('session', API_ID, API_HASH)
 
 # ============= БАННЕР ПРИВЕТСТВИЯ =============
 WELCOME_BANNER = "AgACAgIAAxkBAAFNdChqPekBHYvV2ahngd5FDt-N3Xk0TAACChprG4Yi8Ukaooz0BzOwzwEAAwIAA3cAAzwE"
@@ -25,29 +34,35 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            join_date TEXT
+            subscribe_date TEXT,
+            last_update INTEGER
         )
     ''')
     conn.commit()
     conn.close()
 
-def save_join_date(user_id: int, date: str):
+def save_subscribe_date(user_id: int, date: str):
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT OR REPLACE INTO users (user_id, join_date)
-        VALUES (?, ?)
-    ''', (user_id, date))
+        INSERT OR REPLACE INTO users (user_id, subscribe_date, last_update)
+        VALUES (?, ?, ?)
+    ''', (user_id, date, int(time.time())))
     conn.commit()
     conn.close()
 
-def get_join_date(user_id: int):
+def get_cached_date(user_id: int):
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT join_date FROM users WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT subscribe_date, last_update FROM users WHERE user_id = ?', (user_id,))
     result = cursor.fetchone()
     conn.close()
-    return result[0] if result else None
+    
+    if result:
+        date, last_update = result
+        if int(time.time()) - last_update < 7 * 24 * 60 * 60:
+            return date
+    return None
 
 init_db()
 
@@ -82,6 +97,88 @@ async def check_subscription(user_id: int) -> bool:
         print(f"Ошибка проверки подписки: {e}")
         return False
 
+async def get_subscription_date_telethon(user_id: int):
+    try:
+        cached = get_cached_date(user_id)
+        if cached:
+            return cached
+    except:
+        pass
+    
+    try:
+        channel = await telethon_client.get_entity(CHANNEL_ID)
+        
+        try:
+            result = await telethon_client(GetParticipantRequest(
+                channel=channel,
+                participant=user_id
+            ))
+            participant = result.participant
+            
+            if hasattr(participant, 'date') and participant.date:
+                join_date = participant.date.strftime("%d.%m.%Y в %H:%M")
+                try:
+                    save_subscribe_date(user_id, join_date)
+                except:
+                    pass
+                return join_date
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"Не удалось получить участника напрямую: {e}")
+            
+            offset = 0
+            limit = 100
+            all_participants = []
+            
+            while True:
+                participants = await telethon_client(GetParticipantsRequest(
+                    channel=channel,
+                    filter=ChannelParticipantsSearch(''),
+                    offset=offset,
+                    limit=limit,
+                    hash=0
+                ))
+                all_participants.extend(participants.users)
+                if len(participants.users) < limit:
+                    break
+                offset += limit
+            
+            target_user = None
+            for user in all_participants:
+                if user.id == user_id:
+                    target_user = user
+                    break
+            
+            if not target_user:
+                print(f"Пользователь {user_id} не найден в канале")
+                return None
+            
+            result = await telethon_client(GetParticipantRequest(
+                channel=channel,
+                participant=target_user
+            ))
+            participant = result.participant
+            
+            if hasattr(participant, 'date') and participant.date:
+                join_date = participant.date.strftime("%d.%m.%Y в %H:%M")
+                try:
+                    save_subscribe_date(user_id, join_date)
+                except:
+                    pass
+                return join_date
+            else:
+                return None
+            
+    except FloodWaitError as e:
+        print(f"FloodWait: ждем {e.seconds} секунд")
+        await asyncio.sleep(e.seconds)
+        return await get_subscription_date_telethon(user_id)
+    except Exception as e:
+        print(f"Ошибка получения даты через Telethon: {e}")
+        return None
+
 async def get_profile_photo(user_id: int):
     try:
         user_photos = await bot.get_user_profile_photos(user_id, limit=1)
@@ -104,15 +201,18 @@ async def show_profile(message: types.Message):
         )
         return
     
-    # Получаем дату регистрации в Telegram
-    try:
-        tg_user = await bot.get_chat(user_id)
-        if tg_user.date:
-            join_date = datetime.datetime.fromtimestamp(tg_user.date).strftime("%d.%m.%Y в %H:%M")
-        else:
+    join_date = await get_subscription_date_telethon(user_id)
+    
+    if not join_date:
+        try:
+            tg_user = await bot.get_chat(user_id)
+            if tg_user.date:
+                join_date = datetime.datetime.fromtimestamp(tg_user.date).strftime("%d.%m.%Y в %H:%M")
+                join_date = f"{join_date} (дата регистрации в Telegram)"
+            else:
+                join_date = "Не удалось получить дату"
+        except:
             join_date = "Не удалось получить дату"
-    except:
-        join_date = "Не удалось получить дату"
     
     first_name = user.first_name or "Не указано"
     last_name = user.last_name or ""
@@ -141,7 +241,7 @@ async def show_profile(message: types.Message):
 Имя: {full_name}
 Telegram ID: {user_id}
 Никнейм: {username_display}
-Дата регистрации в Telegram: {join_date}
+Дата: {join_date}
 Статус в канале: {sub_status}
     """
     
@@ -280,6 +380,21 @@ async def process_check_sub(callback_query: types.CallbackQuery):
 async def main():
     print("Бот запущен")
     print(f"ID канала: {CHANNEL_ID}")
+    
+    if not API_ID or not API_HASH or not PHONE:
+        print("ВНИМАНИЕ: Не указаны API_ID, API_HASH или PHONE для Telethon!")
+        print("Дата подписки работать НЕ будет!")
+    else:
+        try:
+            await telethon_client.start(phone=PHONE)
+            print("Telethon подключен")
+            try:
+                channel = await telethon_client.get_entity(CHANNEL_ID)
+                print(f"Канал найден: {channel.title}")
+            except Exception as e:
+                print(f"Ошибка получения канала: {e}")
+        except Exception as e:
+            print(f"Ошибка подключения Telethon: {e}")
     
     try:
         chat = await bot.get_chat(CHANNEL_ID)
